@@ -4,6 +4,9 @@ Sistema inteligente para análise de postura corporal em tempo real, utilizando 
 
 Este projeto foi desenvolvido por **Guilherme Basilio Faria**, **Arthur** e **Denys** como parte do **Projeto Integrador da Universidade de Sorocaba - UNISO**.
 
+<img width="772" height="866" alt="image" src="https://github.com/user-attachments/assets/02506324-78bb-44b1-8124-456293efd14a" />
+
+
 ## Sobre o Projeto
 
 O **Postura Inteligente com IA** é uma aplicação web que utiliza a câmera do computador para identificar pontos do corpo humano e analisar a postura do usuário em tempo real.
