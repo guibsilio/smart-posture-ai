@@ -59,3 +59,7 @@ Caso a postura ruim seja mantida por determinado período, o sistema emite um al
 
 ```bash
 git clone https://github.com/SEU-USUARIO/postura-inteligente-ia.git
+```
+
+- Para testar o projeto, utilize o link: https://service.assuntonerd.com.br/smart-posture-ai.html
+
