@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Postura com IA - Gerenciamento de Históricos</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+<style>
+body {
+  text-align: center;
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: white;
+  margin: 0;
+  padding: 20px;
+}
+
+/* TELA INICIAL */
+#telaInicial {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+}
+
+#telaInicial h1 {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+#telaInicial p {
+  font-size: 18px;
+  max-width: 400px;
+  margin-bottom: 20px;
+}
+
+.imagens {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.imagens img {
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 15px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+  transition: transform 0.3s;
+}
+
+.imagens img:hover {
+  transform: scale(1.1);
+}
+
+#telaInicial button {
+  padding: 15px 25px;
+  font-size: 16px;
+  border-radius: 10px;
+  background: #00c853;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+/* CONTAINER DO VÍDEO E CANVAS */
+.video-container {
+  position: relative;
+  width: 640px;
+  height: 480px;
+  margin: 0 auto;
+}
+
+video, canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 640px;
+  height: 480px;
+  border-radius: 10px;
+}
+
+video {
+  opacity: 0;
+  pointer-events: none;
+}
+
+input, button {
+  padding: 10px;
+  margin: 5px;
+  border-radius: 5px;
+  border: none;
+}
+
+button {
+  cursor: pointer;
+  background: #2196F3;
+  color: white;
+  font-weight: bold;
+}
+
+button:hover {
+  background: #1976D2;
+}
+
+/* Botão de deletar destrutivo */
+.btn-delete {
+  background: #ff1744;
+}
+.btn-delete:hover {
+  background: #b2102f;
+}
+
+#status {
+  font-size: 22px;
+  margin-top: 10px;
+  font-weight: bold;
+}
+
+/* GERENCIADOR DE USUÁRIOS ("PASTAS") */
+#gerenciadorHistoricos {
+  margin-top: 25px;
+  background: #1a1a1a;
+  padding: 15px;
+  border-radius: 8px;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
+  border: 1px solid #333;
+}
+
+.lista-usuarios {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.item-usuario {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #2a2a2a;
+  padding: 8px 15px;
+  border-radius: 5px;
+}
+
+table {
+  margin: auto;
+  margin-top: 20px;
+  border-collapse: collapse;
+  background: #222;
+  width: 100%;
+  max-width: 640px;
+}
+
+td, th {
+  border: 1px solid #444;
+  padding: 8px 15px;
+}
+th { background-color: #333; }
+</style>
+</head>
+
+<body>
+
+<div id="telaInicial">
+  <h1>🧍‍♂️ Postura Inteligente</h1>
+
+  <div class="imagens">
+    <img src="https://cdn-icons-png.flaticon.com/512/2922/2922506.png" alt="Icon 1">
+    <img src="https://cdn-icons-png.flaticon.com/512/3771/3771387.png" alt="Icon 2">
+    <img src="https://cdn-icons-png.flaticon.com/512/3048/3048398.png" alt="Icon 3">
+  </div>
+
+  <p>
+    Monitore sua postura em tempo real usando Inteligência Artificial
+    e melhore sua ergonomia no dia a dia.
+  </p>
+
+  <button onclick="entrarSistema()">Começar</button>
+</div>
+
+<h2>🧍‍♂️ Análise de Postura com IA</h2>
+
+<input type="text" id="nome" placeholder="Digite seu nome">
+<button onclick="iniciar()">Iniciar Monitoramento</button>
+
+<br><br>
+
+<div class="video-container">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas"></canvas>
+</div>
+
+<div id="status">Aguardando início...</div>
+<div id="tempo"></div>
+
+<div id="gerenciadorHistoricos">
+  <h3>📁 Pastas de Históricos Locais</h3>
+  <div id="listaUsuarios" class="lista-usuarios">
+    </div>
+</div>
+
+<div id="historico"></div>
+
+<script>
+function entrarSistema(){
+  document.getElementById("telaInicial").style.display = "none";
+  atualizarListaPastas();
+}
+
+let usuario = "";
+let tempoRuim = 0;
+let tempoBoa = 0;
+let alarmeAtivo = false;
+
+let ultimoTempo = Date.now();
+let ultimoSalvamento = Date.now();
+
+let estadoAtual = "Boa";
+let estadoConfirmado = "Boa";
+let tempoEstado = 0;
+
+let historicoPescoco = [];
+let historicoTronco = [];
+
+const TAMANHO_MEDIA = 5; 
+
+const audio = new Audio("https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg");
+audio.loop = true;
+
+function calcularAngulo(A, B, C) {
+  if (!A || !B || !C) return 0;
+
+  const AB = { x: A.x - B.x, y: A.y - B.y };
+  const CB = { x: C.x - B.x, y: C.y - B.y };
+
+  const dot = (AB.x * CB.x + AB.y * CB.y);
+  const magAB = Math.sqrt(AB.x**2 + AB.y**2);
+  const magCB = Math.sqrt(CB.x**2 + CB.y**2);
+
+  if (magAB === 0 || magCB === 0) return 0;
+
+  let cos = dot / (magAB * magCB);
+  cos = Math.min(1, Math.max(-1, cos));
+
+  return Math.acos(cos) * (180 / Math.PI);
+}
+
+function media(arr, valor) {
+  arr.push(valor);
+  if (arr.length > TAMANHO_MEDIA) {
+    arr.shift();
+  }
+  let soma = 0;
+  for (let i = 0; i < arr.length; i++) {
+    soma += arr[i];
+  }
+  return soma / arr.length;
+}
+
+// Controla a lista global de "pastas" criadas
+function registrarUsuarioNaLista(nome) {
+  let usuarios = JSON.parse(localStorage.getItem("postura_usuarios_lista")) || [];
+  if (!usuarios.includes(nome)) {
+    usuarios.push(nome);
+    localStorage.setItem("postura_usuarios_lista", JSON.stringify(usuarios));
+    atualizarListaPastas();
+  }
+}
+
+// Atualiza visualmente o gerenciador de pastas/usuários
+function atualizarListaPastas() {
+  const listaDiv = document.getElementById("listaUsuarios");
+  let usuarios = JSON.parse(localStorage.getItem("postura_usuarios_lista")) || [];
+
+  if (usuarios.length === 0) {
+    listaDiv.innerHTML = "<p style='color: #888; font-style: italic;'>Nenhuma pasta criada ainda.</p>";
+    return;
+  }
+
+  let html = "";
+  usuarios.forEach(user => {
+    html += `
+      <div class="item-usuario">
+        <span>📁 <strong>${user}</strong></span>
+        <div>
+          <button onclick="verHistoricoDe('${user}')">Abrir Histórico</button>
+          <button class="btn-delete" onclick="deletarPastaDe('${user}')">Deletar</button>
+        </div>
+      </div>
+    `;
+  });
+  listaDiv.innerHTML = html;
+}
+
+function salvarDados(pescoco, tronco, status) {
+  if(!usuario) return;
+  const chave = "dados_" + usuario;
+  const dados = JSON.parse(localStorage.getItem(chave)) || [];
+
+  dados.push({
+    data: new Date().toLocaleString(),
+    pescoco: pescoco.toFixed(1),
+    tronco: tronco.toFixed(1),
+    status: status
+  });
+
+  if(dados.length > 200) dados.shift(); 
+
+  localStorage.setItem(chave, JSON.stringify(dados));
+}
+
+// Mostra o histórico de um usuário específico clicado na lista
+function verHistoricoDe(nomeUsuario) {
+  const chave = "dados_" + nomeUsuario;
+  const dados = JSON.parse(localStorage.getItem(chave)) || [];
+
+  if (dados.length === 0) {
+    document.getElementById("historico").innerHTML = `<p>O histórico de <strong>${nomeUsuario}</strong> está vazio.</p>`;
+    return;
+  }
+
+  let html = `<h3>Visualizando pasta: ${nomeUsuario}</h3>`;
+  html += "<table><tr><th>Data</th><th>Pescoço</th><th>Tronco</th><th>Status</th></tr>";
+  
+  dados.slice().reverse().forEach(d => {
+    html += `<tr><td>${d.data}</td><td>${d.pescoco}°</td><td>${d.tronco}°</td><td>${d.status}</td></tr>`;
+  });
+  html += "</table>";
+
+  document.getElementById("historico").innerHTML = html;
+}
+
+// Remove o histórico completo ("deleta a pasta") do usuário selecionado
+function deletarPastaDe(nomeUsuario) {
+  if (confirm(`Tem certeza que deseja apagar permanentemente a pasta e todo o histórico de "${nomeUsuario}"?`)) {
+    // Remove os dados específicos dele
+    localStorage.removeItem("dados_" + nomeUsuario);
+    
+    // Remove o nome dele da lista global de pastas
+    let usuarios = JSON.parse(localStorage.getItem("postura_usuarios_lista")) || [];
+    usuarios = usuarios.filter(u => u !== nomeUsuario);
+    localStorage.setItem("postura_usuarios_lista", JSON.stringify(usuarios));
+    
+    // Se era o usuário ativo monitorando, reseta a sessão atual
+    if (usuario === nomeUsuario) {
+      usuario = "";
+      document.getElementById("nome").value = "";
+      document.getElementById("status").innerHTML = "Aguardando início...";
+      document.getElementById("tempo").innerHTML = "";
+    }
+
+    // Limpa a tabela se ela estava sendo exibida na tela
+    document.getElementById("historico").innerHTML = "";
+    
+    // Atualiza o painel de pastas
+    atualizarListaPastas();
+  }
+}
+
+function iniciar() {
+  const nomeInput = document.getElementById("nome").value.trim();
+
+  if (!nomeInput) {
+    alert("Digite seu nome para iniciar!");
+    return;
+  }
+
+  usuario = nomeInput;
+  registrarUsuarioNaLista(usuario);
+
+  audio.play().then(() => {
+    audio.pause();
+    audio.currentTime = 0;
+  }).catch(()=>{});
+
+  alert("Monitoramento iniciado para a pasta de: " + usuario);
+}
+
+const videoElement = document.getElementById("video");
+const canvasElement = document.getElementById("canvas");
+const canvasCtx = canvasElement.getContext("2d");
+
+canvasElement.width = 640;
+canvasElement.height = 480;
+
+function onResults(results) {
+  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+  // Só processa a IA se houver um usuário ativo monitorando no momento
+  if (!results.poseLandmarks || usuario === "") {
+    return;
+  }
+
+  const lm = results.poseLandmarks;
+  const shoulder = lm[11];
+  const ear = lm[7];
+  const hip = lm[23];
+
+  if (!shoulder || !ear || !hip) return;
+
+  const refNeck = { x: shoulder.x, y: shoulder.y - 0.08 };
+  const refTorso = { x: hip.x, y: hip.y - 0.08 };
+
+  let neckAngle = calcularAngulo(ear, shoulder, refNeck);
+  let torsoAngle = calcularAngulo(shoulder, hip, refTorso);
+
+  neckAngle = media(historicoPescoco, neckAngle);
+  let torsoAngleFiltrado = media(historicoTronco, torsoAngle);
+
+  drawConnectors(canvasCtx, lm, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+  drawLandmarks(canvasCtx, lm, { color: '#FF0000', lineWidth: 1 });
+
+  let agora = Date.now();
+  let delta = (agora - ultimoTempo) / 1000;
+  ultimoTempo = agora;
+
+  if (neckAngle < 38 && torsoAngleFiltrado < 15) {
+    estadoAtual = "Boa";
+  } else {
+    estadoAtual = "Ruim";
+  }
+
+  if (estadoAtual === estadoConfirmado) {
+    tempoEstado = 0;
+  } else {
+    tempoEstado += delta;
+    if (tempoEstado >= 0.8) { 
+      estadoConfirmado = estadoAtual;
+      tempoEstado = 0;
+      if (estadoConfirmado === "Boa") tempoRuim = 0;
+      if (estadoConfirmado === "Ruim") tempoBoa = 0;
+    }
+  }
+
+  if (estadoConfirmado === "Boa") {
+    tempoBoa += delta;
+    if (alarmeAtivo) {
+      audio.pause();
+      audio.currentTime = 0;
+      alarmeAtivo = false;
+    }
+  }
+
+  if (estadoConfirmado === "Ruim") {
+    tempoRuim += delta;
+    if (tempoRuim >= 10 && !alarmeAtivo) {
+      audio.play().catch(()=>{});
+      alarmeAtivo = true;
+    }
+  }
+
+  const statusDiv = document.getElementById("status");
+  if (estadoConfirmado === "Boa") {
+    statusDiv.innerHTML = "✅ Postura de " + usuario + ": Boa";
+    statusDiv.style.color = "#00c853";
+  } else {
+    statusDiv.innerHTML = "❌ Postura de " + usuario + ": Ruim";
+    statusDiv.style.color = "#ff1744";
+  }
+
+  document.getElementById("tempo").innerHTML =
+    "🟢 Tempo Bom: " + tempoBoa.toFixed(1) + "s | 🔴 Tempo Ruim: " + tempoRuim.toFixed(1) + "s";
+
+  if ((agora - ultimoSalvamento) >= 2000) {
+    salvarDados(neckAngle, torsoAngleFiltrado, estadoConfirmado);
+    ultimoSalvamento = agora;
+  }
+}
+
+const pose = new Pose({
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+});
+
+pose.setOptions({
+  modelComplexity: 0, 
+  smoothLandmarks: true,
+  enableSegmentation: false, 
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+pose.onResults(onResults);
+
+navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+  .then(stream => {
+    videoElement.srcObject = stream;
+    
+    async function monitorarPróximoFrame() {
+      if (!videoElement.paused && videoElement.readyState >= 2) {
+        await pose.send({ image: videoElement });
+      }
+      requestAnimationFrame(monitorarPróximoFrame);
+    }
+    
+    videoElement.onloadedmetadata = () => {
+      monitorarPróximoFrame();
+    };
+  })
+  .catch(err => {
+    console.error("Erro ao acessar a webcam: ", err);
+    alert("Não foi possível acessar a webcam. Verifique as permissões.");
+  });
+
+</script>
+</body>
+</html>
